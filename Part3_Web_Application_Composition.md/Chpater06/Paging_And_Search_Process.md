@@ -544,5 +544,297 @@
   - 페이지 이동이 제대로 동작하기 위해 우선 태그의 링크 내용에서 페이지 정보가 제대로 보이도록 a 태그의 href 속성값을 페이지 번호로 지정한다.
 
     ```HTML
-    
+    <ul class="pagination">
+        <li class="page-item" th:if="${result.prevPage}">
+            <a th:href="${result.prevPage.pageNumber} + 1">PREV [[${result.prevPage.pageNumber} + 1]]</a>
+        </li>
+
+        <li class="page-item" th:classappend="${p.pageNumber == result.currentPageNum - 1}?active: '' " th:each="p:${result.pageList}">
+            <a th:href="${p.pageNumber} + 1">[[${p.pageNumber}+1]]</a>
+        </li>
+
+        <li class="page-item" th:if="${result.nextPage}">
+            <a th:href="${result.nextPage.pageNumber} + 1">NEXT [[${result.nextPage.pageNumber} + 1]]</a>
+        </li>
+    </ul>
     ```
+
+  - 링크를 처리하는 Javascript 부분을 완성하지 않았기 때문에 정상적이 화면 이동은 되지 않았다.
+
+<br />
+
+### 페이지 이동을 위한 JavasScript 처리
+
+  - 페이지 이동을 위한 JavaScript는 layout1.html에 적용된 JQuery를 이용해서 처리한다.
+
+  - 내부적으로 form 태그를 생성하고, 이를 이용해서 submit을 하는 방식으로 처리한다.
+
+    ```HTML
+        <!--      end page display       -->
+
+        <form id='f1' th:action="@{list}" method="get">
+                <input type='hidden' name='page' th:value=${result.currentPageNum}>
+                <input type='hidden' name='size' th:value=${result.currentPage.pageSize}>
+            </form>
+        </div>
+        <!--    end panel    -->
+    ```
+
+  - 사용자가 페이지 번호를 클릭할 때에는 a 태그의 기본 동작인 '이동'을 막는 대신에 form 태그 내에 name='page'인 태그의 값을 변경한 뒤 submit하도록 한다.
+
+    ```HTML
+    <!--   end fragment     -->
+    <th:block layout:fragment="script">
+        <script th:inline="javascript">
+            $(document).ready(function() {
+                var formObj = $("#f1");
+
+                $(".pagination a").click(function(e) {
+
+                    e.preventDefault();
+
+                    formObj.find('[name="page"]').val($(this).attr('href'));
+
+                    formObj.submit();
+                });
+
+            });
+        </script>
+    </th:block>
+    ```
+
+  - 게시물의 내용을 table 형태로 정리
+
+    ```HTML
+    <html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{/layout/layout1}">
+
+    <div layout:fragment="content">
+
+        <div class="panel-heading">List Page</div>
+        <div class="panel-body">
+
+            <div th:with="result=${result.result}">
+
+                <table class="table table-striped table-bordered table-hover" id="dataTables-example">
+                    <thead>
+                        <tr>
+                            <th>BNO</th>
+                            <th>TITLE</th>
+                            <th>WRITER</th>
+                            <th>REGDATE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="odd gradeX" th:each="board:${result.content}">
+                            <td>[[${board.bno}]]</td>
+                            <td><a th:href='${board.bno}' class='boardLink'>[[${board.title}]]</a> </td>
+                            <td>[[${board.writer}]]</td>
+                            <td class="center">[[${#dates.format(board.regdate, 'yyyy-MM-dd')}]]</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!--   paging    -->
+            <nav>
+                <div>
+                    <ul class="pagination">
+                        <li class="page-item" th:if="${result.prevPage}">
+                            <a th:href="${result.prevPage.pageNumber} + 1">PREV [[${result.prevPage.pageNumber} + 1]]</a>
+                        </li>
+
+                        <li class="page-item" th:classappend="${p.pageNumber == result.currentPageNum - 1}?active: '' " th:each="p:${result.pageList}">
+                            <a th:href="${p.pageNumber} + 1">[[${p.pageNumber}+1]]</a>
+                        </li>
+
+                        <li class="page-item" th:if="${result.nextPage}">
+                            <a th:href="${result.nextPage.pageNumber} + 1">NEXT [[${result.nextPage.pageNumber} + 1]]</a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+            <!--      end page display       -->
+
+            <form id='f1' th:action="@{list}" method="get">
+                <input type='hidden' name='page' th:value=${result.currentPageNum}>
+                <input type='hidden' name='size' th:value=${result.currentPage.pageSize}>
+            </form>
+
+
+        </div>
+        <!--    end panel    -->
+    </div>
+    <!--   end fragment     -->
+
+    <th:block layout:fragment="script">
+
+        <script th:inline="javascript">
+            $(document).ready(function() {
+                var formObj = $("#f1");
+
+                $(".pagination a").click(function(e) {
+
+                    e.preventDefault();
+
+                    formObj.find('[name="page"]').val($(this).attr('href'));
+
+                    formObj.submit();
+                });
+
+            });
+        </script>
+    </th:block>
+    ```
+
+## 6.2.3 검색 조건의 처리
+
+  - 페이지 이동에 대한 모든 처리가 완료되었다면 사용자가 지정하는 검색 조건과 키워드를 입력했을 때 처리가 가능하도록 WebBoardController와 PageVO, list.html 페이지를 수정한다.
+
+  - PageVO가 기존에 page와 size만을 파라미터로 전달받았던 것을 'keyword(검색 키워드)'와 'type(검색 타입)'을 수집할 수 있도록 수정한다.
+
+  ```Java
+    private String keyword;
+    private String type;
+
+    public PageVO(){
+        this.page = 1;
+        this.size = DEFAULT_SIZE;
+    }
+
+    public String getKeyword() {
+        return keyword;
+    }
+
+    public void setKeyword(String keyword) {
+        this.keyword = keyword;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+  ```
+
+  - WebBOardController의 list()는 Predicate를 생성하는 부분을 전달받은 PageVO를 이용하도록 수정한다.
+   
+     ```Java
+    @GetMapping("/list")
+    public void list(@ModelAttribute("pageVO") PageVO vo, Model model) {
+        Pageable page = vo.makePageable(0, "bno");
+
+        Page<WebBoard> result = repository.findAll(repository.makePredicate(vo.getType(), vo.getKeyword()), page);
+
+        log.info("" + page);
+        log.info("" + result);
+
+        log.info("TOTAL PAGE NUMBER" + result.getTotalPages());
+
+        model.addAttribute("result", new PageMaker(result));
+    }
+     ```
+  
+  - 예시 URL
+
+      - http://localhost:8080/boards/list?type=t&keyword=10
+
+      - http://localhost:8080/boards/list?type=w&keyword=user09
+
+<br />
+
+### list.html에서의 검색 처리
+
+  - URL을 조작하여 검색이 가능한 것을 확인했다면, 검색 조건을 선택하도록 하는 것과 그에 대한 이벤트 처리를 해야한다.
+
+  ```HTML
+  	</table>
+
+    <div>
+        <select id='searchType'>
+            <option>--</option>
+            <option value='t' >Title</option>
+            <option value='c' >Content</option>
+            <option value='w' >Writer</option>
+        </select>
+        <input type='text' id='searchKeyword'>
+        <button id='searchBtn'>Search</button> 
+    </div>
+  ```
+
+  - 검색 조건이 있는 경우에는 정상적으로 선택 항목이 체크되고, 키워드가 들어갈 수 있도록 처리한다. 검색 조건과 키워드는 PageVO에 같이 전달되도록 처리해야 한다.
+
+  <br />
+
+  ```HTML
+    <div>
+        <select id="searchType">
+            <option>--</option>
+            <option value="t" th:selected="${pageVO.type} == t">Title</option>
+            <option value="c" th:selected="${pageVO.type} == c">Content</option>
+            <option value="w" th:selected="${pageVO.type} == w">Writer</option>
+        </select>
+        <input type='text' id="searchKeyword" th:value="${pageVO.keyword}">
+        <button id="searchBtn">Search</button>
+    </div>
+  ```
+
+  - 검색 조건과 키워드에 대한 처리를 완료한 후에 브라우저에서 'boards/list?type=t&keyword=user09'를 입력하면 화면에서 검색 조건이 선택디고 키워드가 보이게 된다.
+
+  - 화면에 보이는 부분 외에도 검색 조건은 모든 페이지 이동시 같이 전달되어야 하므로 기존에 작성된 form 태그가 변경될 필요가 있다.
+
+    ```HTML
+    <form id='f1' th:action="@{list}" method="get">
+        <input type='hidden' name='page' th:value=${result.currentPageNum}>
+        <input type='hidden' name='size' th:value=${result.currentPage.pageSize}>
+        <input type='hidden' name='type' th:value=${pageVO.type}>
+        <input type='hidden' name='keyword' th:value=${pageVO.keyword}>
+    </form>
+    ```
+
+    - 화면 이동은 form 태그를 이용해서 처리되므로, 검색 후에 페이지 번호를 클릭하면 검색 조건이 같이 유지되면서 이동하는 것을 확인할 수 있다.
+
+<br />
+
+### 검색 버튼 클릭
+
+  - 사용자가 검색 조건을 선택하고, 'Search'버튼을 클릭하면, 검색을 새로 한다는 의미이다.
+
+  - 따라서 페이지는 1로 변경되어야 하고, 검색 조건과 키워드 역시 다시 셋팅되어야 한다.
+
+  ```HTML
+  <th:block layout:fragment="script">
+
+    <script th:inline="javascript">
+        $(document).ready(function() {
+            var formObj = $("#f1");
+
+            $(".pagination a").click(function(e) {
+
+                e.preventDefault();
+
+                formObj.find('[name="page"]').val($(this).attr('href'));
+
+                formObj.submit();
+            });
+
+            $("#searchBtn").click(function (e){
+                var typeStr = $("#searchType").find(":selected").val();
+                var keywordStr = $("#searchKeyword").val();
+
+                console.log(typeStr, "", keywordStr);
+
+                formObj.find("[name='type']").val(typeStr);
+                formObj.find("[name='keyword']").val(keywordStr);
+                formObj.find("[name='page']").val("1");
+                formObj.submit();
+            });
+        });
+    </script>
+  </th:block>
+  ```
+
