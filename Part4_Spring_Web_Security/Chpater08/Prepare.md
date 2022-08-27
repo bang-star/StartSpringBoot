@@ -71,6 +71,21 @@
     protected void configure(HttpSecurity http) throws Exception{
         log.info("security config ...... ");
     }
+
+    @Bean
+    public PasswordEncoder passwordEncoder(){
+        return new PasswordEncoder() {
+            @Override
+            public String encode(CharSequence rawPassword) {
+                return rawPassword.toString();
+            }
+
+            @Override
+            public boolean matches(CharSequence rawPassword, String encodedPassword) {
+                return rawPassword.equals(encodedPassword);
+            }
+        };
+    }
     ```
 
      - configure() 메소드를 오바라이드하는 경우네느 HttpSecurity 클래스 타입을 파라미터로 처리하는 메소드를 선택해야 한다는 점을 주의해야한다.
