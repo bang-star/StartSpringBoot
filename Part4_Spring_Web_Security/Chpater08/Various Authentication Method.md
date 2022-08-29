@@ -369,4 +369,152 @@
 
     <img src="https://user-images.githubusercontent.com/63120360/187036718-706af419-c790-4b4d-a436-1cd25b3b4972.png">
 
-  - GrantedAuthority 인터페이스는 문자열을 반환하는 getAuthority()메소드 하나만을 가지고 있다.
+  - GrantedAuthority 인터페이스는 문자열을 반환하는 getAuthority()메소드 하나만을 가지고 있다. 현재 코드에서는 SimpleGrantedAuthority 클래스를 이용해서 'ROLE_MANAGER'라는 문자열이 반환되도록 설계되었다.
+
+  - 사용자의 아이디(username)는 어떤 값을 입력하더라도 전혀 관계가 없으므로, 아무 값이나 입력하고, 패스워드만 1111로 지정해 주면 정상적으로 '/manager'로 이동하는 것을 볼 수 있다.
+
+<br />
+<hr />
+<br />
+
+## 8.4.4 MemberRepository와의 연동
+
+  - ZerockUsersService가 정상적으로 동작하는 것을 확인하였고, 이번에는 MemberRepository와의 연동 작업을 처리할 것이다.
+
+  - 연동 작업에서 가장 고민이 되는 것은 MemberRepository는 'org.zerock.domain.Member' 클래스와 'org.zerock.domain.MemberRole'이라는 클래스를 사용할 뿐 스프링 시큐리티의 User나 GrantedAuthority 같은 인터페이스 타입은 사용하지 않는다는 것이다.
+
+  - ZerockUsersService에 MemberRepository 인스턴스를 주입해 줄 필요가 있다.
+
+    ```Java
+    @Service
+    @Log
+    public class ZerockUsersService implements UserDetailsService {
+        
+        @Autowired
+        MemberRepository repo;
+
+        @Override
+        public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+            
+            // TODO Auto-generated method stub
+            // User sampleUser = new User(username, "1111", Arrays.asList(new SimpleGrantedAuthority("ROLE_MANAGER")));
+            // return sampleUser;
+            
+            repo.findById(username).ifPresent(member -> log.info("" + member));
+            
+            return null;
+        }
+    }
+    ```
+
+  - MemberRepository의 findById()는 PK를 이용해서 Member 엔티티 인스턴스를 얻어오지만, UserDetails라는 리턴 타입에는 맞지 않는다.
+
+  - if Member 타입의 인스턴스를 UserDetails로 처리한다면
+
+    1 - Member 클래스에 UserDetails 인터페이스를 구현해 주는 방법을 이용
+
+        UserDetails 인터페이스의 모든 메소드를 구현해야 하는 불편함이 있다.
+
+    2 - Member 클래스가 이미 UserDetails 인터페이스를 구현한 User 클래스를 상속
+
+        생성자를 추가해야 하는 불편함이 있다.
+
+    3 - 조합을 이용해서 Member를 포함하는 별도의 클래스를 만드는 방법을 사용
+
+        별도의 클래스를 만들고, Member의 인스턴스를 감싸는 형태의 클래스
+
+        이를 통해 Member의 모든 정보를 추가적으로 사용해야하는 상황에 유용하다는 장점이 있다.
+
+<br />
+
+### ZerockSecurityUser 클래스
+
+  - ZerockSecurityUser는 스프링 시큐리티의 User 클래스를 상속받는 형태로 생성한다.
+
+  - User 클래스에는 생성자가 존재하기 때문에 에러가 없는 상태를 만들려면 User 클래스의 생성자를 호출하는 코드가 필요하다.
+
+    ```Java
+    public class ZerockSecurityUser extends User {
+
+        public ZerockSecurityUser(
+                String username, 
+                String password, 
+                Collection<? extends GrantedAuthority> authorities) {
+            super(username, password, authorities);
+        }
+    }
+    ```
+
+  - ZerockSecurityUser에서 Member 타입의 인스턴스를 이용해서 ZerockSecurityUser를 생성
+
+    ```Java
+    @Getter
+    @Setter
+    public class ZerockSecurityUser extends User {
+        
+        private static final String ROLE_PREFIX = "ROLE_";
+        
+        private Member member;
+        
+        public ZerockSecurityUser(Member member){
+            super(member.getUid(), member.getUpw(), makeGrantedAuthority(member.getRoles()));
+            
+            this.member = member;
+        }
+
+        private static List<GrantedAuthority> makeGrantedAuthority(List<MemberRole> roles) {
+            
+            List<GrantedAuthority> list = new ArrayList<>();
+            
+            roles.forEach(role -> list.add(new SampleGrantedAuthority(ROLE_PREFIX+role.getRoleName())));
+            
+            return list;
+        }
+    }
+    ```
+
+  - ZerockUsersSerivce에서 Member 타입의 인스턴스를 이용해서 ZerockSecurityUser를 생성할 것이므로, ZerockSecurityUser는 Member를 이용하도록 수정할 필요가 있다.
+
+    ```Java
+    @Getter
+    @Setter
+    public class ZerockSecurityUser extends User {
+
+        private static final String ROLE_PREFIX = "ROLE_";
+
+        private Member member;
+
+        public ZerockSecurityUser(Member member){
+            super(member.getUid(), member.getUpw(), makeGrantedAuthority(member.getRoles()));
+
+            this.member = member;
+        }
+
+        private static List<GrantedAuthority> makeGrantedAuthority(List<MemberRole> roles) {
+
+            List<GrantedAuthority> list = new ArrayList<>();
+
+            roles.forEach(role -> list.add(new SimpleGrantedAuthority((ROLE_PREFIX + role.getRoleName()))));
+
+            return list;
+        }
+    }
+    ```
+
+  - ZerockUsersService에서 ZerockSecurityUser를 사용하도록 수정한다.
+
+    ```Java
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+
+        // TODO Auto-generated method stub
+        // User sampleUser = new User(username, "1111", Arrays.asList(new SimpleGrantedAuthority("ROLE_MANAGER")));
+        // return sampleUser;
+
+        return repo.findById(username)
+                .filter(m -> m != null)
+                .map(m -> new ZerockSecurityUser(m)).get();
+    }
+    ```
+
+  - '/manager'나 '/admin'경로에 접근할 때 데이터베이스에 있는 정보를 활용하는지 확인해야한다.
