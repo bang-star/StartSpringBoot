@@ -230,3 +230,143 @@
         }
     }
     ```
+
+  - ZerockUsersService는 @Service 어노테이션이 추가되어 있으므로, 스프링에서 빈으로 처리된다.
+
+  - SecurityConfig에서 만들어진 ZerockUsersService 객체를 주입받을 수 있도록 처리한다.(기존의 DataSource는 더 이상 사용하지 않으므로 제거한다.)
+
+  - ZerockUsersService를 이용하게 되면 기존의 설정은 의미가 없으므로 configureGlobal() 메소드는 사용하지 않도록 제거할 수 있습니다.
+
+    ```Java
+    @Log
+    @EnableWebSecurity
+    public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+        @Autowired
+        DataSource dataSource;
+
+        @Override
+        protected void configure(HttpSecurity http) throws Exception{
+
+            log.info("security config ...... ");
+
+            http.authorizeRequests().antMatchers("/guest/**").permitAll();
+            http.authorizeRequests().antMatchers("/manager/**").hasRole("MANAGER");
+            http.authorizeRequests().antMatchers("/admin/**").hasRole("ADMIN");
+
+            http.formLogin().loginPage("/login");
+
+            // 사용자에게 권한이 없음을 알려주기 위한 방법
+            http.exceptionHandling().accessDeniedPage("/accessDenied");
+
+            // Logout을 위한 URI 지정
+            http.logout().logoutUrl("/logout").invalidateHttpSession(true);
+        }
+
+        @Bean
+        public PasswordEncoder passwordEncoder(){
+            return new PasswordEncoder() {
+                @Override
+                public String encode(CharSequence rawPassword) {
+                    return rawPassword.toString();
+                }
+
+                @Override
+                public boolean matches(CharSequence rawPassword, String encodedPassword) {
+                    return rawPassword.equals(encodedPassword);
+                }
+            };
+        }
+    }
+    ```
+
+  - SecurityConfig의 configure()에서 사용하는 HttpSecurity 객체는 ZerockUsersService를 이용하게 한다.
+
+    ```Java
+    @Log
+    @EnableWebSecurity
+    public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+        @Autowired
+        ZerockUsersService zerockUsersService;
+        
+        @Override
+        protected void configure(HttpSecurity http) throws Exception{
+
+            log.info("security config ...... ");
+
+            http.authorizeRequests().antMatchers("/guest/**").permitAll();
+            http.authorizeRequests().antMatchers("/manager/**").hasRole("MANAGER");
+            http.authorizeRequests().antMatchers("/admin/**").hasRole("ADMIN");
+
+            http.formLogin().loginPage("/login");
+
+            // 사용자에게 권한이 없음을 알려주기 위한 방법
+            http.exceptionHandling().accessDeniedPage("/accessDenied");
+
+            // Logout을 위한 URI 지정
+            http.logout().logoutUrl("/logout").invalidateHttpSession(true);
+
+            http.userDetailsService(zerockUsersService);
+        }
+
+        @Bean
+        public PasswordEncoder passwordEncoder(){
+            return new PasswordEncoder() {
+                @Override
+                public String encode(CharSequence rawPassword) {
+                    return rawPassword.toString();
+                }
+
+                @Override
+                public boolean matches(CharSequence rawPassword, String encodedPassword) {
+                    return rawPassword.equals(encodedPassword);
+                }
+            };
+        }
+    }
+    ```
+
+<br />
+
+### 간단한 커스텀 UserDetailsService 사용하기
+
+  - 인증을 처리할 때 새롭게 생성한 ZerockUsersService를 이용하므로, 간단한 코드를 추가해서 인증이 정상적으로 처리되는지를 확인해야 한다.
+
+  - UserDetailsService의 loadUserByUsername()은 사용자의 계정 정보(아이디)를 이용해서 UserDetails 인터페이스를 구현한 객체를 반환해야 한다.
+
+  - Spring Security API에는 UserDetails 인터페이스를 구현한 클래스들이 존재한다.
+
+    <img src="https://user-images.githubusercontent.com/63120360/187036452-d8a0fe58-b24f-4d20-b8ab-1f8bfe9a1c46.png">
+
+    <br />
+
+    - UserDetails 인터페이스를 직접 구현하는 방식을 사용하는 것도 좋지만, UserDetails 인터페이스는 생각보다 많은 메소드가 존재하므로, 간편하게 UserDetails를 구현해둔 User 클래스를 이용할 것이다.
+
+  - User 클래스는 username과 password, Authority라는 정보만을 이용하는 간단한 생성자를 제공한다. 이때 Authority는 '권한'을 의미한다.
+
+    ```Java
+    @Service
+    @Log
+    public class ZerockUsersService implements UserDetailsService {
+
+        @Override
+        public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+            // TODO Auto-generated method stub
+            User sampleUser = new User(username, "1111", Arrays.asList(new SimpleGrantedAuthority("ROLE_MANAGER")));
+            return sampleUser;
+        }
+    }
+    ```
+
+    <br />
+
+    - loadUserByUsername()의 내부에서 User 클래스를 이용해서 객체를 생성한다. 이때 User 클래스의 인스턴스는 Collection< Authority>를 가질 수 있으므로, Arrays.asList()를 이용해서 여러 권한을 부여할 수 있다.
+
+    <br />
+
+  - SampleGrantedAuthority 클래스는 GrantedAuthority라는 인터페이스의 구현체이다.
+
+    <img src="https://user-images.githubusercontent.com/63120360/187036718-706af419-c790-4b4d-a436-1cd25b3b4972.png">
+
+  - GrantedAuthority 인터페이스는 문자열을 반환하는 getAuthority()메소드 하나만을 가지고 있다.
