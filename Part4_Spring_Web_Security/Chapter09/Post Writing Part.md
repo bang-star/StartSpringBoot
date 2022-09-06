@@ -179,3 +179,60 @@
 	xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
 	layout:decorate="~{/layout/layout1}">
     ```
+  
+  - 버튼 처리는 로그인하지 않은 사용자와 로그인한 사용자를 같이 처리해야 하므로 다음과 같이 처리된다.
+
+    ```HTML
+    <div class="pull-right" 
+		  th:with="uid =${#authentication.principal} eq 'anonymousUser'? 'Guest' :${#authentication.principal.member.uid} ">
+
+			<a
+				th:if="${uid} eq ${vo.writer}"
+				th:href="@{ modify(page=${pageVO.page}, 
+			                size=${pageVO.size}, 
+			                type=${pageVO.type}, 
+			                keyword=${pageVO.keyword},
+			                bno =${vo.bno}
+			             )}"
+				class="btn btn-default" id='goModBtn'>Modify/Delete</a>
+    ```
+
+<br />
+
+  - authentication.principal을 이용해서 현재 '익명의 사용자(anonymousUser)'인지 '로그인한 사용자(${#authentication.principal.member.uid})'인지를 체크한다.
+
+  - 사용자의 아이디를 uid 변수로 지정하고, 이를 용해서 th:if로 버튼이 보이도록 처리한다.
+
+  - a 태그에 id 속성을 추가한 것은 JavaScript 처리를 단순하게 하기 위해서이다.
+
+  - 현재 로그인한 사용자가 자신이 작성한 게시물을 조회하는 경우에는 Modify/Delete 버튼이 보이게 된다.
+
+  - JavaScript를 이용해서 처리하고 싶다면 a 태그에서 th:if부분을 삭제한 후에 다음과 같은 형태로 작성할 수 있다.
+
+    ```Javascript
+    var uid = [[${#authentication.principal} eq 'anonymousUser'? null :${#authentication.principal.member.uid}]] ;
+
+    $("#goModBtn").click(function(e){
+		  
+		  e.preventDefault();
+		  
+		  if(uid == null){
+			  if(confirm("로그인 할까요?")){
+				  //self.location = [[@{/login}]];
+				  self.location = $(this).attr("href");
+			  }
+		  }else {
+			  
+			  if(uid == [[${vo.writer}]]){
+					self.location = $(this).attr('href');
+			  }else {
+				  alert("작성자만이 수정이나 삭제할 수 있습니다.");
+			  }
+		  }
+	  });
+    ```
+
+   - 만일 현재 사용자가 로그인하지 않은 상태에서 '수정/삭제'버튼을 클릭하면 브라우저는 '수정/삭제'가 가능한 URL로 이동하게 된다.
+
+   - 수정/삭제는 로그인이 필요하므로, 버튼을 클릭하면 자동으로 로그인 페이지가 보일 것이다.
+
